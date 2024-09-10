@@ -1,4 +1,6 @@
 ﻿using loginPrueba.Models;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
@@ -47,6 +49,49 @@ namespace loginPrueba.Controllers
                 Token = new JwtSecurityTokenHandler().WriteToken(securityToken),
                 Expiracion = expiracion,
             };
+        }
+
+        [HttpGet("RenovarToken")]
+        [Authorize(AuthenticationSchemes =JwtBearerDefaults.AuthenticationScheme)]
+        public async Task<ActionResult<RespuestaAutenticacion>> Renovar()
+        {
+            var emailClaims = HttpContext.User.Claims.Where(x => x.Type == "email").FirstOrDefault();
+            var credencialesUsuario = new CredencialesUsuario()
+            {
+                Email = emailClaims!.Value
+            };
+            return await ConstruirToken(credencialesUsuario);
+        }
+
+        [HttpPost("Registrar")]
+        public async Task<ActionResult<RespuestaAutenticacion>> Registrar(CredencialesUsuario credencialesUsuario)
+        {
+            var usuario = new IdentityUser
+            {
+                UserName = credencialesUsuario.Email,
+                Email = credencialesUsuario.Email
+            };
+
+            var resultado = await userManager.CreateAsync(usuario, credencialesUsuario.Password);
+            if (resultado.Succeeded)
+                return await ConstruirToken(credencialesUsuario);
+            return BadRequest(resultado.Errors);
+        }
+
+        [HttpPost("Login")]
+        public async Task<ActionResult<RespuestaAutenticacion>> Login(CredencialesUsuario credencialesUsuario)
+        {
+            var resultado = await signInManager.PasswordSignInAsync(
+                credencialesUsuario.Email, credencialesUsuario.Password, isPersistent: false, lockoutOnFailure: false);
+            if (resultado.Succeeded)
+                return await ConstruirToken(credencialesUsuario);
+
+            var error = new Mensaje()
+            {
+                Error = "Login incorrecto"
+            };
+
+            return BadRequest(error);
         }
     }
 
